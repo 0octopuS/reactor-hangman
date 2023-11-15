@@ -7,17 +7,17 @@ import org.scalatest.time.{Seconds, Span}
 
 class QueueSemanticsTest extends AnyFunSuite with TimeLimitedTests {
 
-  //The time limit is arbitrary and dependent on the computer
+  // The time limit is arbitrary and dependent on the computer
   override def timeLimit: Span = Span(10, Seconds)
 
   class IntegerHandle(val i: Integer) extends Handle[Integer] {
-    def this() = { this(scala.util.Random.nextInt())}
+    def this() = { this(scala.util.Random.nextInt()) }
     override def read(): Integer = scala.util.Random.nextInt()
   }
 
   class IntegerHandler(h: Handle[Integer]) extends EventHandler[Integer] {
     override def getHandle: Handle[Integer] = h
-    override def handleEvent(arg: Integer): Unit = { } //do nothing
+    override def handleEvent(arg: Integer): Unit = {} // do nothing
   }
 
   def generateIntegerEvent: Event[Integer] = {
@@ -47,15 +47,18 @@ class QueueSemanticsTest extends AnyFunSuite with TimeLimitedTests {
     val e1 = generateIntegerEvent
     val e2 = generateIntegerEvent
     val e3 = generateIntegerEvent
+    val e4: Event[Integer] = Event(null, new IntegerHandler(null))
 
     q.enqueue(e1)
     q.enqueue(e2)
     q.enqueue(e3)
+    q.enqueue(e4) // add data = null test
 
-    assert(q.getSize === 3)
+    assert(q.getSize === 4)
     assert(q.dequeue === e1)
     assert(q.dequeue === e2)
     assert(q.dequeue === e3)
+    assert(q.dequeue === e4)
   }
 
   test("the queue implements getAll") {
@@ -69,7 +72,7 @@ class QueueSemanticsTest extends AnyFunSuite with TimeLimitedTests {
     q.enqueue(e3)
 
     val everything = q.getAll
-    
+
     assert(q.getSize === 0)
     assert(everything.length === 3)
     assert(everything(0) === e1)
