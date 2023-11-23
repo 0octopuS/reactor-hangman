@@ -6,78 +6,76 @@ package reactor
 
 import reactor.api.Event
 import scala.collection.mutable.Queue
+import reactor.utils.BiSemaphore
+import reactor.utils.Semaphore
 
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//
-//  TODO： This version is a busy-wait(worst solution)
-//         Next step we need to add a waiting state
-//
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 final class BlockingEventQueue[T](private val capacity: Int) {
-  val queue = Queue[Event[T]]()
+  require(capacity > 0)
+  // The BlockingQueue has a bounded buffer,
+  // So we use two semaphores notEmpty and notFull
+  private val notEmpty = new Semaphore(0)
+  private val notFull = new Semaphore(capacity)
+
+  // Operate is a Binary Semaphore to guarantee
+  // only one thread modify the current queue
+  private val operate = new BiSemaphore()
+
+  private val queue = Queue[Event[T]]()
+
+  // enqueue method return the fist event in the queue
+  // 1. Try to acquire the notFull semaphore.
+  //    If success then the queue is not full and can be enqueued.
+  // 2. Try to acquire the operate semaphore.
+  //    If success then it's the only thread work on the queue
+  // 3. operates
+  // 4. release the operate semaphore so other thread can start to operated
+  // 5. release the notEmpty semaphore
+
   @throws[InterruptedException]
   def enqueue[U <: T](e: Event[U]): Unit = {
-    if (e == null) { // Additional:  not accept null input to enqueue
-      throw new IllegalArgumentException("Cannot enqueue null Event")
-      return
-    }
-    try
-      synchronized {
-        while (queue.length == capacity) {
-          wait() // Wait until the queue is not full
-        }
-        queue.enqueue(
-          e.asInstanceOf[Event[T]]
-        ) // add the specified event to the tail of the queue
-        notifyAll() // weak other threads
-      }
-    catch {
+    // TODO: not sure how to deal with the exception here
+    //      try every semaphore and throw?
+    try {
+      notFull.acquire()
+    } catch {
       case e: InterruptedException => {
-        println("Exception: interrupted")
-        throw (e) //  throw an InterruptedException
+        throw (e)
       }
     }
+    operate.acquire()
+    queue.enqueue(e.asInstanceOf[Event[T]])
+    notEmpty.release()
+    operate.release()
+
   }
 
   @throws[InterruptedException]
   def dequeue: Event[T] = {
-    try
-      synchronized {
-
-        while (queue.isEmpty) {
-          wait() // Wait until the queue is non-empty
-        }
-        var front = queue.dequeue // remove the event from the head of the queue
-        notifyAll() // weak other threads
-        front // return it
-      }
-    catch {
-      case e: InterruptedException => {
-        println("Exception: interrupted")
-        throw (e) //  throw an InterruptedException
-      }
-    }
+    notEmpty.acquire()
+    operate.acquire()
+    val event = queue.dequeue()
+    operate.release()
+    notFull.release()
+    event
   }
 
-  // getAll returns the entire current contents of the queue
-  // TODO: the number if items getAll returns must have a well defined upper bound.
+  @throws[InterruptedException]
   def getAll: Seq[Event[T]] = {
-    try
-      synchronized {
-        queue.dequeueAll((x: Event[T]) => true)
-      }
-    catch {
-      case e: InterruptedException => {
-        println("Exception: interrupted")
-        throw (e)
-      }
-    }
+    notEmpty.acquireAll()
+    operate.acquire()
+    val event = queue.dequeueAll((x: Event[T]) => true)
+    operate.release()
+    notFull.releaseAll()
+    event
   }
 
-  // getSize returns the current element number in the queue
-  def getSize: Int = queue.length
+  @throws[InterruptedException]
+  def getSize: Int = {
+    operate.acquire()
+    val size = queue.size
+    operate.release()
+    size
+  }
 
-  // getCapacity returns the maximum size of the queue
   def getCapacity: Int = capacity
-
 }
