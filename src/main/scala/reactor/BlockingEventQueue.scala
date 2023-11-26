@@ -101,7 +101,7 @@ final class BlockingEventQueue[T](private val capacity: Int) {
     val event = queue.dequeueAll((x: Event[T]) => true)
     operate.release()
 
-    // releaseAll takes the trul dequeue amount, and add it to the notFull semaphore.
+    // releaseAll takes the true dequeue amount, and add it to the notFull semaphore.
     notFull.releaseAll(notEmptyValue)
     event
   }

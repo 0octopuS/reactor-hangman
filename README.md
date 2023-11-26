@@ -11,7 +11,9 @@ This file is mainly to record the learning process of this project.
 The busy wait method simply uses `synchronized`, `wait` and `notifyAll`. The method uses a `while` loop to detect whether the resource is available. Once the condition is met, it starts to operate.
 
 ❌ Problem 1: Busy wait takes up CPU resources.
+
 ❌ Problem 2: `wait` and `notifyAll` is a public method, which means that it can be called from outside the `BlockingQueue` object.
+
 ❌ Problem 3: `notifyAll` calls all the thread. If only one thread can execute, then all the other thread needs to go back to the waiting state.
 
 
@@ -92,6 +94,7 @@ It needs to match the real amount of dequeue elements.
 
 
 - Scenario 1: `getAll` and `dequeue` at the same time, but the `release` in `dequeue` happens later
+
 | Thread  1                        | Thread 2            | Queue(5) | notEmpty | notFull |
 | -------------------------------- | ------------------- | -------- | -------- | ------- |
 | `notFull.acquire`                |                     | 0        | 0        | 4       |
