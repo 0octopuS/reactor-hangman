@@ -35,8 +35,8 @@ So `notify` will always call the opposite side.
 
 ❌ Problem: Edge case with `getAll`
 
-
 - Scenario 1: `getAll` and `dequeue` at the same time, but the `release` in `dequeue` happens later
+
 | Thread  1             | Thread 2            | Queue(5) | notEmpty | notFull     |
 | --------------------- | ------------------- | -------- | -------- | ----------- |
 | `notFull.acquire`     |                     | 0        | 0        | 4           |
