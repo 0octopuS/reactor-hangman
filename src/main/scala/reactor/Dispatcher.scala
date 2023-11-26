@@ -19,8 +19,8 @@ final class Dispatcher(private val queueLength: Int = 10) {
     var handler: EventHandler[_] = null
     // Repeatedly wait until an event is received from a registered handle and dispatch these events.
     while (workerThreadList.nonEmpty) {
-      // event = select
-      event = eventQueue.dequeue // Get the first event in the queue
+      event = select
+      // event = eventQueue.dequeue // Get the first event in the queue
       handler = event.getHandler // Get the handler of selected event
       if (workerThreadList.contains(handler)) {
         // If the handler is already in workerThreadList, then handle it
@@ -31,9 +31,9 @@ final class Dispatcher(private val queueLength: Int = 10) {
 
   // TODO: Tip from course =>  The reactor pattern logic that finds the next event is often called the select() method.
   // But here I think to select event, we only needs a dequeue. The following method can be used for replacement.
-  // def select(): Event[_] = {
-  //   eventQueue.dequeue
-  // }
+  def select(): Event[_] = {
+    eventQueue.dequeue
+  }
 
   def addHandler[T](handler: EventHandler[T]): Unit = {
     if (handler == null) throw new IllegalArgumentException()
@@ -92,6 +92,8 @@ final class WorkerThread[T](
 
   def cancelThread(): Unit = {
     running = false
-    interrupt()
+    super.interrupt()
+    // super.isInterrupted()
+    // interrupt()
   }
 }

@@ -23,28 +23,35 @@ class Semaphore(private val capacity: Int) {
 
   var permits = capacity
 
-  def acquireAll(): Unit = synchronized {
-    while (permits == 0) {
-      wait();
-    }
-    permits = 0;
-  }
-
   def acquire(): Unit = synchronized {
-    while (permits == 0) {
+    while (permits <= 0) {
       wait();
     }
     permits = permits - 1;
   }
+  def acquireAll(): Int = synchronized {
+    while (permits <= 0) {
+      wait();
+    }
+    val temp = permits
+    permits = 0;
+    temp
+  }
 
   def release(): Unit = synchronized {
     permits = permits + 1;
-    notify();
+    notify(); // Because only release 1 space in the queue, so only one waiting thread should be waked up.
+    // Because the producers only wait in `nonFull`, the consumers only wait in `nonEmpty`.
+    // `notify` will always call the opposite side.
   }
 
-  def releaseAll(): Unit = synchronized {
-    permits = capacity;
-    notify();
+  def acquireBelowZero(size: Int): Unit = synchronized {
+    permits = permits - size;
+  }
+
+  def releaseAll(size: Int): Unit = synchronized {
+    permits = permits + size;
+    notifyAll(); // Because the
   }
 
   def availablePermits(): Int = permits
