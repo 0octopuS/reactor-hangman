@@ -80,6 +80,7 @@ object HangmanGame {
     val dispatcher = new Dispatcher();
     val serverSocket = new ServerSocket(0);
     println(s"Server started on port ${serverSocket.getLocalPort}")
+
     // val socket: Socket = serverSocket.accept()
     // game.playerHandlers += socket
     // val handler = new PlayerHandler(socket, game, dispatcher)
