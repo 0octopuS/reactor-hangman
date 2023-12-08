@@ -43,12 +43,24 @@ class PlayerHandler(socket: Socket, game: HangmanGame, dispatcher: Dispatcher)
       case null => {
         println("Got null") // This should not happen
       }
-      case _ => {
+      case _ if evt.length > 1 => {
+        val name = evt
+        game.playerHandlers.foreach((s) =>
+          out.println(
+            game.gameState.getMaskedWord + game.gameState.getGuessesLeft
+          )
+        )
+      }
+      case _ if evt.length == 1 => {
         println(evt)
         game.gameState = game.gameState.makeGuess(evt.charAt(0))
         print(game.playerHandlers)
         game.playerHandlers.foreach((s) =>
-          out.println(evt.charAt(0) + " " + game.gameState.getMaskedWord)
+          out.println(
+            evt.charAt(
+              0
+            ) + " " + game.gameState.getMaskedWord + game.gameState.getGuessesLeft // This still needs a name at the end
+          )
         )
         // out.println(game.gameState.getMaskedWord)
         if (game.gameState.isGameOver) {
@@ -68,11 +80,11 @@ object HangmanGame {
     val dispatcher = new Dispatcher();
     val serverSocket = new ServerSocket(0);
     println(s"Server started on port ${serverSocket.getLocalPort}")
-    val socket: Socket = serverSocket.accept()
-    game.playerHandlers += socket
-    val handler = new PlayerHandler(socket, game, dispatcher)
-    dispatcher.addHandler(handler)
-    dispatcher.handleEvents()
+    // val socket: Socket = serverSocket.accept()
+    // game.playerHandlers += socket
+    // val handler = new PlayerHandler(socket, game, dispatcher)
+    // dispatcher.addHandler(handler)
+    // dispatcher.handleEvents()
 
     while (!game.gameState.isGameOver) {
       val socket: Socket = serverSocket.accept()
