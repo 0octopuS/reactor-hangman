@@ -61,7 +61,6 @@ final class Dispatcher(private val queueLength: Int = 10) {
 
 }
 
-// Hint:
 final class WorkerThread[T](
     private val handler: EventHandler[T],
     private val queue: BlockingEventQueue[Any]
@@ -75,15 +74,18 @@ final class WorkerThread[T](
     var data: T = null.asInstanceOf[T]
 
     while (running) {
+      // Create event from the read data
       data = handle.read()
       event = new Event[T](data, handler)
 
       try {
+        // Enqueue, but anticipate Interruption
         queue.enqueue(event)
       } catch {
         case e: InterruptedException => { throw (e) }
       }
 
+      // Anticipate that the Handle will stop the handler.
       if (data == null) {
         running = false
       }
