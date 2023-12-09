@@ -1,6 +1,6 @@
-// group 1
+// group 22
 // 123456 Firstname Lastname
-// 654321 Firstname Lastname
+// 101603393 Martynas Krupskis
 
 package hangman
 
@@ -12,6 +12,7 @@ import java.io.{BufferedReader, InputStreamReader, PrintWriter}
 import scala.collection.mutable.ListBuffer
 import java.net.SocketTimeoutException
 import scala.collection.mutable.Map
+import java.net.SocketException
 
 class HangmanGame(val hiddenWord: String, val initialGuessCount: Int) {
   require(hiddenWord != null && hiddenWord.length > 0)
@@ -112,7 +113,6 @@ object HangmanGame {
     }
 
     serverSocket.close()
-    println("Game Over!")
   }
 
 }
@@ -132,12 +132,16 @@ class ConnectionHandler(
           socketServer.accept()
         } catch {
           case _: SocketTimeoutException => null // Ignore timeout
+          case _: SocketException        => null
         }
       }
     }
   }
 
   override def handleEvent(evt: Socket): Unit = {
+    if (evt == null) {
+      return
+    }
     val handler = new PlayerHandler(evt, game, dispatcher)
     game.handlers += handler
     game.playerHandlersMap += (evt.getPort() -> evt)
