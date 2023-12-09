@@ -10,27 +10,32 @@ import java.net.{ServerSocket, Socket}
 import scala.io.BufferedSource
 import java.io.{BufferedReader, InputStreamReader, PrintWriter}
 import scala.collection.mutable.ListBuffer
+import java.net.SocketTimeoutException
+import scala.collection.mutable.Map
 
 class HangmanGame(val hiddenWord: String, val initialGuessCount: Int) {
   require(hiddenWord != null && hiddenWord.length > 0)
   require(initialGuessCount > 0)
 
   var gameState: GameState = GameState(hiddenWord, initialGuessCount, Set())
-  val playerHandlers: ListBuffer[Socket] = ListBuffer[Socket]()
+  val handlers: scala.collection.mutable.Set[EventHandler[_]] =
+    scala.collection.mutable.Set()
+  val playerHandlersMap: Map[Int, Socket] = Map()
+  val playerNames: Map[Int, String] = Map()
 }
 
 class PlayerHandler(socket: Socket, game: HangmanGame, dispatcher: Dispatcher)
-    extends EventHandler[String] {
+    extends EventHandler[(String, Socket)] {
   private val in = new BufferedReader(
     new InputStreamReader(socket.getInputStream)
   )
   private val out = new PrintWriter(socket.getOutputStream, true)
 
-  override def getHandle: Handle[String] = {
-    new Handle[String] {
-      override def read(): String = {
+  override def getHandle: Handle[(String, Socket)] = {
+    new Handle[(String, Socket)] {
+      override def read(): (String, Socket) = {
         try {
-          in.readLine()
+          (in.readLine(), socket)
         } catch {
           case _ => null
         }
@@ -38,33 +43,39 @@ class PlayerHandler(socket: Socket, game: HangmanGame, dispatcher: Dispatcher)
     }
   }
 
-  override def handleEvent(evt: String): Unit = {
+  override def handleEvent(evt: (String, Socket)): Unit = {
     evt match {
-      case null => {
-        println("Got null") // This should not happen
+      case (x, null) => {
+        println("Got null") // This should be impossible
       }
-      case _ if evt.length > 1 => {
-        val name = evt
-        game.playerHandlers.foreach((s) =>
-          out.println(
-            game.gameState.getMaskedWord + game.gameState.getGuessesLeft
-          )
+      case (msg, msgSocket) if msg.length > 1 => {
+        val name = msg
+        game.playerNames += (socket.getPort() -> name)
+        val outU = new PrintWriter(socket.getOutputStream, true)
+
+        outU.println(
+          game.gameState.getMaskedWord + " " + game.gameState.guessCount
         )
       }
-      case _ if evt.length == 1 => {
-        println(evt)
-        game.gameState = game.gameState.makeGuess(evt.charAt(0))
-        print(game.playerHandlers)
-        game.playerHandlers.foreach((s) =>
-          out.println(
-            evt.charAt(
-              0
-            ) + " " + game.gameState.getMaskedWord + game.gameState.getGuessesLeft // This still needs a name at the end
-          )
-        )
-        // out.println(game.gameState.getMaskedWord)
+      case (msg, msgSocket) if msg.length == 1 => {
+        game.gameState = game.gameState.makeGuess(msg.charAt(0))
+        game.playerHandlersMap.foreach {
+          case (port, s) => {
+            val outU = new PrintWriter(s.getOutputStream, true)
+            val name =
+              game.playerNames.getOrElse(msgSocket.getPort(), "Unknown")
+            outU.println(
+              msg.charAt(
+                0
+              ) + " " + game.gameState.getMaskedWord + " " + game.gameState.guessCount + " " + name // This still needs a name at the end
+            )
+          }
+        }
+
         if (game.gameState.isGameOver) {
-          dispatcher.removeHandler(this)
+          game.handlers.iterator.foreach { handler =>
+            dispatcher.removeHandler(handler)
+          }
         }
       }
     }
@@ -86,14 +97,18 @@ object HangmanGame {
     // val handler = new PlayerHandler(socket, game, dispatcher)
     // dispatcher.addHandler(handler)
     // dispatcher.handleEvents()
+    val connectionHandler =
+      new ConnectionHandler(serverSocket, game, dispatcher)
+    dispatcher.addHandler(connectionHandler)
+    game.handlers += connectionHandler
 
+    // Main loop: handle new connections and events
     while (!game.gameState.isGameOver) {
-      val socket: Socket = serverSocket.accept()
-      val handler = new PlayerHandler(socket, game, dispatcher)
-      print("adding a new one, baby")
-      game.playerHandlers += socket
-      dispatcher.addHandler(handler)
-      dispatcher.handleEvents()
+      try {
+        dispatcher.handleEvents()
+      } catch {
+        case e: Exception => println("Error handling events: " + e.getMessage)
+      }
     }
 
     serverSocket.close()
@@ -102,39 +117,30 @@ object HangmanGame {
 
 }
 
-// class ConnectionHandler(server: SocketServer)
-//     extends EventHandler[String] {
-//   private val socketServer: SocketServer = server;
+// Connection Handler is responsible for listening for new client connections on the opened ServerSocket
+class ConnectionHandler(
+    server: ServerSocket,
+    game: HangmanGame,
+    dispatcher: Dispatcher
+) extends EventHandler[Socket] {
+  private val socketServer: ServerSocket = server;
 
-//   override def getHandle: Handle[String] = {
-//     new Handle[String] {
-//       override def read(): String = {
-//         try {
-//           server.accept();
-//         } catch {
-//           case _ => null
-//         }
-//       }
-//     }
-//   }
+  override def getHandle: Handle[Socket] = {
+    new Handle[Socket] {
+      override def read(): Socket = {
+        try {
+          socketServer.accept()
+        } catch {
+          case _: SocketTimeoutException => null // Ignore timeout
+        }
+      }
+    }
+  }
 
-//   override def handleEvent(evt: String): Unit = {
-//     evt match {
-//       case null => {
-//         println("Got null") // This should not happen
-//       }
-//       case _ => {
-//         println(evt)
-//         game.gameState = game.gameState.makeGuess(evt.charAt(0))
-//         print(game.playerHandlers)
-//         game.playerHandlers.foreach((s) =>
-//           out.println(evt.charAt(0) + " " + game.gameState.getMaskedWord)
-//         )
-//         // out.println(game.gameState.getMaskedWord)
-//         if (game.gameState.isGameOver) {
-//           dispatcher.removeHandler(this)
-//         }
-//       }
-//     }
-//   }
-// }
+  override def handleEvent(evt: Socket): Unit = {
+    val handler = new PlayerHandler(evt, game, dispatcher)
+    game.handlers += handler
+    game.playerHandlersMap += (evt.getPort() -> evt)
+    dispatcher.addHandler(handler)
+  }
+}
