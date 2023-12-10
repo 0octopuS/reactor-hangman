@@ -8,7 +8,7 @@ import reactor.api.{EventHandler, Handle}
 import reactor.Dispatcher
 import java.net.{ServerSocket, Socket}
 import scala.io.BufferedSource
-import java.io.{BufferedReader, InputStreamReader, PrintWriter}
+import java.io.{BufferedReader, InputStreamReader, PrintWriter, IOException}
 import scala.collection.mutable.ListBuffer
 import java.net.SocketTimeoutException
 import scala.collection.mutable.Map
@@ -38,7 +38,7 @@ class PlayerHandler(socket: Socket, game: HangmanGame, dispatcher: Dispatcher)
         try {
           (in.readLine(), socket)
         } catch {
-          case _ => null
+          case _: Throwable => null
         }
       }
     }
@@ -106,10 +106,22 @@ class PlayerHandler(socket: Socket, game: HangmanGame, dispatcher: Dispatcher)
         //   }
 
         if (game.gameState.isGameOver) {
-          game.handlers.iterator.foreach { handler =>
-            dispatcher.removeHandler(handler)
-          }
+          // Gracefully handle removal
+          handleGameOver()
         }
+      }
+    }
+  }
+  def handleGameOver(): Unit = {
+    synchronized {
+      dispatcher.removeHandler(this)
+      try {
+        socket.close()
+      } catch {
+        case e: IOException =>
+          println("Error closing socket: " + e.getMessage)
+        case _: Throwable =>
+          println("Unexpected error handling events")
       }
     }
   }
@@ -178,5 +190,10 @@ class ConnectionHandler(
     game.handlers += handler
     game.playerHandlersMap += (evt.getPort() -> evt)
     dispatcher.addHandler(handler)
+
+    if (game.gameState.isGameOver) {
+      // Gracefully handle removal via PlayerHandler's method
+      handler.handleGameOver()
+    }
   }
 }
