@@ -112,6 +112,8 @@ class PlayerHandler(socket: Socket, game: HangmanGame, dispatcher: Dispatcher)
       }
     }
   }
+
+  // >>> add a function to handle ending game
   def handleGameOver(): Unit = {
     synchronized {
       dispatcher.removeHandler(this)
@@ -192,8 +194,11 @@ class ConnectionHandler(
     dispatcher.addHandler(handler)
 
     if (game.gameState.isGameOver) {
-      // Gracefully handle removal via PlayerHandler's method
-      handler.handleGameOver()
+      // Gracefully handle removal via  's method
+      synchronized {
+        handler.handleGameOver()
+        dispatcher.removeHandler(this) // >> It should be removed here
+      }
     }
   }
 }
