@@ -1,5 +1,5 @@
 // group 22
-// 123456 Firstname Lastname
+// 101479682 Zhongxuan Xie
 // 101603393 Martynas Krupskis
 
 package hangman
@@ -31,7 +31,7 @@ class PlayerHandler(socket: Socket, game: HangmanGame, dispatcher: Dispatcher)
     new InputStreamReader(socket.getInputStream)
   )
   private val out = new PrintWriter(socket.getOutputStream, true)
-
+  private var isUsernameSet = false
   override def getHandle: Handle[(String, Socket)] = {
     new Handle[(String, Socket)] {
       override def read(): (String, Socket) = {
@@ -49,29 +49,61 @@ class PlayerHandler(socket: Socket, game: HangmanGame, dispatcher: Dispatcher)
       case (x, null) => {
         println("Got null") // This should be impossible
       }
-      case (msg, msgSocket) if msg.length > 1 => {
-        val name = msg
-        game.playerNames += (socket.getPort() -> name)
-        val outU = new PrintWriter(socket.getOutputStream, true)
+      // >>> This case deal with all the inputs
+      // >>> The first input is treated as username, by setting a isUsernameSet variable
+      // >>> All username are unique by checking playerNames
+      case (msg, msgSocket) if msg.length > 0 => {
+        if (!isUsernameSet) {
+          // First message from the client, consider it as a username
+          val name = msg
+          if (!game.playerNames.values.toSet.contains(name)) {
 
-        outU.println(
-          game.gameState.getMaskedWord + " " + game.gameState.guessCount
-        )
-      }
-      case (msg, msgSocket) if msg.length == 1 => {
-        game.gameState = game.gameState.makeGuess(msg.charAt(0))
-        game.playerHandlersMap.foreach {
-          case (port, s) => {
-            val outU = new PrintWriter(s.getOutputStream, true)
-            val name =
-              game.playerNames.getOrElse(msgSocket.getPort(), "Unknown")
+            game.playerNames += (socket.getPort() -> name)
+            isUsernameSet = true
+            val outU = new PrintWriter(socket.getOutputStream, true)
             outU.println(
-              msg.charAt(
-                0
-              ) + " " + game.gameState.getMaskedWord + " " + game.gameState.guessCount + " " + name // This still needs a name at the end
+              game.gameState.getMaskedWord + " " + game.gameState.guessCount
             )
           }
+        } else if (msg.length == 1) {
+          // Subsequent single-character messages are guesses
+          game.gameState = game.gameState.makeGuess(msg.charAt(0))
+          game.playerHandlersMap.foreach {
+            case (port, s) => {
+              val outU = new PrintWriter(s.getOutputStream, true)
+              val name =
+                game.playerNames.getOrElse(msgSocket.getPort(), "Unknown")
+              outU.println(
+                msg.charAt(
+                  0
+                ) + " " + game.gameState.getMaskedWord + " " + game.gameState.guessCount + " " + name // This still needs a name at the end
+              )
+            }
+          }
         }
+        // case (msg, msgSocket) if msg.length > 1 => {
+        //   val name = msg
+        //   game.playerNames += (socket.getPort() -> name)
+        //   val outU = new PrintWriter(socket.getOutputStream, true)
+
+        //   outU.println(
+        //     game.gameState.getMaskedWord + " " + game.gameState.guessCount
+        //   )
+        // }
+        // case (msg, msgSocket) if msg.length == 1 => {
+        //   game.gameState = game.gameState.makeGuess(msg.charAt(0))
+        //   game.playerHandlersMap.foreach {
+        //     case (port, s) => {
+        //       val outU = new PrintWriter(s.getOutputStream, true)
+        //       val name =
+        //         game.playerNames.getOrElse(msgSocket.getPort(), "Unknown")
+        //       outU.println(
+        //         msg.charAt(
+        //           0
+        //         ) + " " + game.gameState.getMaskedWord + " " + game.gameState.guessCount + " " + name // This still needs a name at the end
+        //       )
+        //     }
+        //   }
 
         if (game.gameState.isGameOver) {
           game.handlers.iterator.foreach { handler =>
